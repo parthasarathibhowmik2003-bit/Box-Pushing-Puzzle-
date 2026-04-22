@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sokoban - Box Pusher</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;500;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<style>
+:root{--bg:#0e0e0e;--bg2:#161616;--card:#1c1c1c;--border:#2a2a2a;--fg:#f0e6d3;--muted:#7a7067;--accent:#e85d04;--accent2:#f48c06;--green:#2d9a5e;--green2:#40c77b;--wall:#4a3f35;--wallTop:#5c4f43;--floor:#1e1a16;--floorLine:#2a2520}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--fg);min-height:100vh;overflow:hidden;user-select:none}
+.screen{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity .4s,transform .4s;z-index:1}
+.screen.hidden{opacity:0;pointer-events:none;transform:scale(.96)}
+.title-logo{font-size:clamp(3rem,8vw,5.5rem);font-weight:900;letter-spacing:-.03em;background:linear-gradient(135deg,var(--accent),var(--accent2),#fbbf24);-webkit-background-clip:text;-webkit-text-fill-color:transparent;line-height:1.1}
+.title-sub{color:var(--muted);font-size:1.1rem;font-weight:300;margin-top:.5rem;letter-spacing:.15em;text-transform:uppercase}
+.btn{background:var(--card);border:1px solid var(--border);color:var(--fg);padding:.85rem 2.2rem;border-radius:12px;font-family:inherit;font-size:1rem;font-weight:500;cursor:pointer;transition:all .2s;display:inline-flex;align-items:center;gap:.6rem}
+.btn:hover{background:var(--accent);border-color:var(--accent);transform:translateY(-2px);box-shadow:0 8px 24px rgba(232,93,4,.25)}
+.btn:active{transform:translateY(0)}
+.btn-sm{padding:.5rem 1rem;font-size:.85rem;border-radius:8px}
+.btn-accent{background:var(--accent);border-color:var(--accent)}
+.btn-accent:hover{background:var(--accent2);border-color:var(--accent2)}
+.title-buttons{display:flex;gap:1rem;margin-top:2.5rem;flex-wrap:wrap;justify-content:center}
+.level-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(56px,1fr));gap:8px;max-width:640px;width:90%;max-height:60vh;overflow-y:auto;padding:4px;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+.level-grid::-webkit-scrollbar{width:6px}
+.level-grid::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.level-cell{aspect-ratio:1;display:flex;align-items:center;justify-content:center;background:var(--card);border:1px solid var(--border);border-radius:10px;font-weight:700;font-size:.95rem;cursor:pointer;transition:all .2s;position:relative}
+.level-cell:hover{border-color:var(--accent);transform:scale(1.08)}
+.level-cell.completed{background:var(--green);border-color:var(--green);color:#fff}
+.level-cell.completed::after{content:'\f00c';font-family:'Font Awesome 6 Free';font-weight:900;position:absolute;top:-4px;right:-4px;background:var(--accent);color:#fff;width:18px;height:18px;border-radius:50%;font-size:.55rem;display:flex;align-items:center;justify-content:center}
+.level-cell.current{border-color:var(--accent);box-shadow:0 0 12px rgba(232,93,4,.3)}
+.section-title{font-size:1.6rem;font-weight:700;margin-bottom:1.2rem}
+.game-header{display:flex;align-items:center;justify-content:space-between;width:100%;max-width:700px;padding:.8rem 1rem;gap:.5rem;flex-wrap:wrap}
+.game-info{display:flex;gap:1.2rem;align-items:center;font-size:.9rem}
+.game-info span{color:var(--muted)}
+.game-info strong{color:var(--fg);font-weight:700}
+.game-controls{display:flex;gap:.4rem}
+.game-controls button{background:var(--card);border:1px solid var(--border);color:var(--muted);width:38px;height:38px;border-radius:8px;cursor:pointer;font-size:.85rem;transition:all .15s;display:flex;align-items:center;justify-content:center}
+.game-controls button:hover{color:var(--fg);border-color:var(--accent)}
+.canvas-wrap{position:relative;display:flex;align-items:center;justify-content:center;flex:1;width:100%}
+canvas{border-radius:12px;image-rendering:auto}
+.dpad{display:none;position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:50}
+.dpad button{position:absolute;width:54px;height:54px;background:rgba(28,28,28,.9);border:1px solid var(--border);color:var(--fg);border-radius:14px;font-size:1.1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent}
+.dpad button:active{background:var(--accent)}
+.dpad .d-up{left:50%;transform:translateX(-50%);top:0}
+.dpad .d-down{left:50%;transform:translateX(-50%);bottom:0}
+.dpad .d-left{top:50%;transform:translateY(-50%);left:0}
+.dpad .d-right{top:50%;transform:translateY(-50%);right:0}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;z-index:100;transition:opacity .3s}
+.overlay.hidden{opacity:0;pointer-events:none}
+.win-card{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:2.5rem;text-align:center;max-width:360px;width:90%;transform:scale(.9);transition:transform .3s}
+.overlay:not(.hidden) .win-card{transform:scale(1)}
+.win-icon{font-size:3rem;color:var(--green2);margin-bottom:1rem}
+.win-title{font-size:1.5rem;font-weight:900;margin-bottom:.3rem}
+.win-stats{color:var(--muted);font-size:.9rem;margin-bottom:1.5rem}
+.win-stats strong{color:var(--fg)}
+.win-buttons{display:flex;gap:.6rem;justify-content:center;flex-wrap:wrap}
+.hint-bar{color:var(--muted);font-size:.75rem;padding:.5rem;text-align:center;letter-spacing:.05em}
+@media(hover:none)and(pointer:coarse){.dpad{display:block}.hint-bar{display:none}}
+.bg-glow{position:fixed;width:400px;height:400px;border-radius:50%;filter:blur(120px);opacity:.08;pointer-events:none;z-index:0}
+.bg-glow.g1{background:var(--accent);top:-100px;right:-100px}
+.bg-glow.g2{background:var(--green);bottom:-100px;left:-100px}
+@keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+</style>
+</head>
+<body>
+<div class="bg-glow g1"></div>
+<div class="bg-glow g2"></div>
+
+<!-- Title Screen -->
+<div class="screen" id="titleScreen">
+  <div class="title-logo">SOKOBAN</div>
+  <div class="title-sub">Box Pushing Puzzle</div>
+  <div class="title-buttons">
+    <button class="btn btn-accent" onclick="showLevelSelect()"><i class="fas fa-play"></i> Play</button>
+    <button class="btn" onclick="showLevelSelect()"><i class="fas fa-th"></i> Levels</button>
+  </div>
+</div>
+
+<!-- Level Select Screen -->
+<div class="screen hidden" id="levelScreen">
+  <div class="section-title">Select Level</div>
+  <div class="level-grid" id="levelGrid"></div>
+  <div style="margin-top:1.5rem">
+    <button class="btn btn-sm" onclick="showTitle()"><i class="fas fa-arrow-left"></i> Back</button>
+  </div>
+</div>
+
+<!-- Game Screen -->
+<div class="screen hidden" id="gameScreen">
+  <div class="game-header">
+    <div class="game-info">
+      <div>Level <strong id="lvlNum">1</strong></div>
+      <div>Moves <strong id="moveNum">0</strong></div>
+      <div>Best <strong id="bestNum">-</strong></div>
+    </div>
+    <div class="game-controls">
+      <button onclick="undoMove()" title="Undo (Z)"><i class="fas fa-undo"></i></button>
+      <button onclick="resetLevel()" title="Reset (R)"><i class="fas fa-redo"></i></button>
+      <button onclick="showLevelSelect()" title="Menu"><i class="fas fa-bars"></i></button>
+    </div>
+  </div>
+  <div class="canvas-wrap"><canvas id="gameCanvas"></canvas></div>
+  <div class="hint-bar">Arrow Keys / WASD to move &nbsp;|&nbsp; Z to undo &nbsp;|&nbsp; R to reset</div>
+</div>
+
+<!-- D-Pad for mobile -->
+<div class="dpad" id="dpad">
+  <button class="d-up" ontouchstart="handleDpad(0,-1,event)" onmousedown="handleDpad(0,-1,event)"><i class="fas fa-chevron-up"></i></button>
+  <button class="d-down" ontouchstart="handleDpad(0,1,event)" onmousedown="handleDpad(0,1,event)"><i class="fas fa-chevron-down"></i></button>
+  <button class="d-left" ontouchstart="handleDpad(-1,0,event)" onmousedown="handleDpad(-1,0,event)"><i class="fas fa-chevron-left"></i></button>
+  <button class="d-right" ontouchstart="handleDpad(1,0,event)" onmousedown="handleDpad(1,0,event)"><i class="fas fa-chevron-right"></i></button>
+</div>
+
+<!-- Win Overlay -->
+<div class="overlay hidden" id="winOverlay">
+  <div class="win-card">
+    <div class="win-icon"><i class="fas fa-trophy"></i></div>
+    <div class="win-title">Level Complete</div>
+    <div class="win-stats">Solved in <strong id="winMoves">0</strong> moves</div>
+    <div class="win-buttons">
+      <button class="btn btn-sm" onclick="resetLevel();hideWin()"><i class="fas fa-redo"></i> Retry</button>
+      <button class="btn btn-sm btn-accent" onclick="nextLevel()"><i class="fas fa-forward"></i> Next</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ========== LEVEL DATA (50 Levels) ========== */
+/* # = wall, space = floor, . = target, $ = box, @ = player, * = box on target, + = player on target */
+const LEVELS = [
+// Level 1 — Push right
+["#####","#@$.#","#   #","#####"],
+// Level 2 — Push down
+["#####","# @ #","# $ #","# . #","#####"],
+// Level 3 — Push up
+["#####","# . #","# $ #","# @ #","#####"],
+// Level 4 — Push left
+["#####","#   #","#.$ #","# @ #","#####"],
+// Level 5 — Navigate to push
+["######","# .  #","# ## #","#  $ #","#  @ #","######"],
+// Level 6 — Two boxes straight
+["#######","#  @  #","#  $  #","#  $  #","#  .  #","#  .  #","#######"],
+// Level 7 — Two boxes down
+["######","# @  #","# $$ #","# .. #","#    #","######"],
+// Level 8 — Two boxes opposite
+["#######","#  .  #","#  $  #","#  @  #","#  $  #","#  .  #","#######"],
+// Level 9 — Two boxes cross
+["#######","#  @  #","# $.$ #","#  .  #","#     #","#######"],
+// Level 10 — Two boxes spread
+["#######","#     #","# .$  #","#  @  #","#  $. #","#     #","#######"],
+// Level 11 — L-shape
+["######","#    #","# $  #","## ##"," #.# "," ### "],
+// Level 12 — Reverse L
+[" #### ","##  #","# $.#","# @ #","#####"],
+// Level 13 — Two L-shapes
+["#######","#  @  #","# $$  #","##.## "," #. # "," ###  "],
+// Level 14 — Corridor turn
+["########","# @    #","# #### #","#    # #","# $  . #","#      #","########"],
+// Level 15 — Zigzag
+["########","#      #","# $### #","# #  . #","# #    #","# @    #","########"],
+// Level 16 — Room with door
+["########","#      #","# .**$ #","# .##$ #","#   @  #","########"],
+// Level 17 — Two rooms
+["#########","#   #   #","# $ . $ #","#   #   #","###   ###","# $ . $ #","#   #   #","#   @   #","#########"],
+// Level 18 — Warehouse
+["########","#  . . #","#  # # #","# $$   #","#  # # #","#  . . #","#  @   #","########"],
+// Level 19 — Cross
+["#######","#  .  #","# $#$ #","#  @  #","# $#$ #","#  .  #","#######"],
+// Level 20 — Tight squeeze
+["#######","#. $ @#","#. $  #","#.    #","#######"],
+// Level 21 — Three in a row
+["########","# @    #","# $$$  #","# ...  #","#      #","########"],
+// Level 22 — Three stack
+["#######","#  @  #","# $.$ #","#  $  #","# ... #","#     #","#######"],
+// Level 23 — Corner pocket
+["########","#   .  #","# ###  #","# $ $  #","# ###  #","#   .$ #","#   @  #","########"],
+// Level 24 — Windmill
+["#######","# . . #","# $ $ #","#  @  #","# $ $ #","# . . #","#######"],
+// Level 25 — Staircase
+["#########","# @     #","# $ #   #","# $ # . #","# $ # . #","#   # . #","#       #","#########"],
+// Level 26 — Double corridor
+["##########","#   ##   #","# $ ## $ #","#   ..   #","# $ .. $ #","#   ##   #","#   @    #","##########"],
+// Level 27 — Diamond
+["#########","#       #","#  ...  #","# # $ # #","#  $@$  #","# # $ # #","#       #","#########"],
+// Level 28 — Maze intro
+["#########","#   #   #","# $ . $ #","#   #   #","## ### ##","# $ . $ #","#   #   #","#   @   #","#########"],
+// Level 29 — Storage
+["##########","#        #","# $ $$$  #","# . ...  #","#    #   #","# @      #","##########"],
+// Level 30 — Spiral
+["###########","#         #","# .##### #","# .#   # #","# .# $ # #","# .# $@# #","# .# $ # #","# .##### #","#         #","###########"],
+// Level 31 — Four corners
+["#########","# . # . #","# $ # $ #","#   #   #","#   @   #","#   #   #","# $ # $ #","# . # . #","#########"],
+// Level 32 — Grid lock
+["##########","# ..  .. #","# $$  $$ #","#        #","#   ##   #","#   @    #","##########"],
+// Level 33 — Bridge
+["###########","#    #    #","# $  #  $ #","# .  #  . #","#    #    #","## ##### ##","#  $ . $  #","#    @    #","###########"],
+// Level 34 — Loop
+["##########","#   ##   #","# $ .. $ #","#   ##   #","# $    $ #","#   ##   #","# $ .. $ #","#   ##   #","#   @    #","##########"],
+// Level 35 — Fortress
+["###########","#  .   .  #","#  $   $  #","## ### ### #","#  $ @ $  #","## ### ### #","#  $   $  #","#  .   .  #","###########"],
+// Level 36 — Quad room
+["############","#          #","# .$  .$  .#","#  ######  #","# .$  @  $.#","#  ######  #","# .$  .$  .#","#          #","############"],
+// Level 37 — Cross roads
+["###########","#    #    #","# .$ # $. #","#    #    #","#  . # .  #","## ### ### ##","#  . # .  #","#    #    #","# .$ # $. #","#    @    #","###########"],
+// Level 38 — Warehouse II
+["############","#          #","# .$$$$$.  #","# .#####.  #","# .#####.  #","# .$$$$$.  #","#     @    #","############"],
+// Level 39 — Chambers
+["############","#  ######  #","#  # .. #  #","#  # $$ #  #","#  # $$ #  #","#  # .. #  #","#  ######  #","#  # $$ #  #","#  # .. #  #","#  # @  #  #","#  ######  #","############"],
+// Level 40 — Grand hall
+["#############","# ..... #   #","# $$$$$ # $ #","# ##### # $ #","#       # $ #","# ##### # . #","#       #   #","#############"],
+// Level 41 — Five alive
+["#############","#           #","# . . . . . #","# # # # # # #","# $ $ $ $ $ #","#     @     #","#############"],
+// Level 42 — Pentagon
+["##############","#            #","# .$ .$ .$  #","#  ###  ###  #","#  #  $@$  # #","#  ###  ###  #","# .$ .$ .$  #","#            #","##############"],
+// Level 43 — Labyrinth
+["#############","#.  #       #","#. $    #   #","#.  ### # $ #","#.    $   $ #","### ### ### #","#  $ #   $  #","#  . # . .  #","#  @ #       #","#############"],
+// Level 44 — Archive
+["##############","#            #","# $$$  $$$  #","# ...  ...  #","# ###  ###  #","#            #","# $$$  $$$  #","# ...  ...  #","#     @      #","##############"],
+// Level 45 — Cascade
+["###############","#             #","# .$ .$. .$  #","#  # # # # #  #","#  $ $ $ $ $  #","#  # # # # #  #","#  . . . . .  #","#      @      #","###############"],
+// Level 46 — Temple
+["################","#              #","# .$ .$ .$ .$  #","#  ##  ##  ##  #","#  $  $  $  $  #","#  ##  ##  ##  #","# .$ .$ .$ .$  #","#      @       #","################"],
+// Level 47 — Nexus
+["##################","#                #","# .$.$.$.$.  #","# # ## ## ## # #","#  $ $ $ $ $  #","# # ## ## ## # #","# .$.$.$.$.  #","#      @       #","##################"],
+// Level 48 — Colosseum
+["###################","#                   #","# .$ .$ .$ .$ .$  #","#  # # # # # # #  #","#  $ $ $ $ $ $ $  #","#  # # # # # # #  #","# .$ .$ .$ .$ .$  #","#       @         #","###################"],
+// Level 49 — Summit
+["####################","#                    #","# .$.$.$.$.$.$  #","# ## ## ## ## ## # #","#  $  $  $  $  $  #","# ## ## ## ## ## # #","# .$.$.$.$.$.$  #","#        @        #","####################"],
+// Level 50 — Finale
+["######################","#                        #","# .$.$.$.$.$.$.$  #","# ## ## ## ## ## ## # #","#  $  $  $  $  $  $  #","# ## ## ## ## ## ## # #","# .$.$.$.$.$.$.$  #","#          @          #","######################"]
+];
+
+/* ========== GAME STATE ========== */
+const WALL=1,FLOOR=0,TARGET=2;
+let currentLevel=0,grid=[],rows=0,cols=0,player={r:0,c:0},boxes=[],targets=[],moves=0,history=[];
+let completed=JSON.parse(localStorage.getItem('sokoban_done')||'{}');
+let bestScores=JSON.parse(localStorage.getItem('sokoban_best')||'{}');
+let playerDir={dr:0,dc:1}; // facing direction
+let cellSize=48,offsetX=0,offsetY=0;
+let canvas,ctx;
+let animFrame=0;
+let particles=[];
+
+/* ========== SCREEN MANAGEMENT ========== */
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.add('hidden'));
+  document.getElementById(id).classList.remove('hidden');
+}
+function showTitle(){showScreen('titleScreen')}
+function showLevelSelect(){
+  showScreen('levelScreen');
+  const g=document.getElementById('levelGrid');
+  g.innerHTML='';
+  for(let i=0;i<LEVELS.length;i++){
+    const d=document.createElement('div');
+    d.className='level-cell'+(completed[i]?' completed':'')+(i===currentLevel?' current':'');
+    d.textContent=i+1;
+    d.onclick=()=>startLevel(i);
+    g.appendChild(d);
+  }
+}
+function showGame(){showScreen('gameScreen');document.getElementById('dpad').style.display=''}
+
+/* ========== LEVEL PARSING ========== */
+function parseLevel(idx){
+  const map=LEVELS[idx];
+  rows=map.length;
+  cols=Math.max(...map.map(r=>r.length));
+  grid=[];boxes=[];targets=[];player={r:0,c:0};
+  for(let r=0;r<rows;r++){
+    grid[r]=[];
+    for(let c=0;c<cols;c++){
+      const ch=(map[r]||'')[c]||' ';
+      if(ch==='#'){grid[r][c]=WALL}
+      else if(ch==='.'){grid[r][c]=TARGET;targets.push({r,c})}
+      else if(ch==='$'){grid[r][c]=FLOOR;boxes.push({r,c})}
+      else if(ch==='@'){grid[r][c]=FLOOR;player={r,c}}
+      else if(ch==='*'){grid[r][c]=TARGET;targets.push({r,c});boxes.push({r,c})}
+      else if(ch==='+'){grid[r][c]=TARGET;targets.push({r,c});player={r,c}}
+      else{grid[r][c]=FLOOR}
+    }
+  }
+  // Flood-fill to find reachable floor, mark unreachable as wall (for visual)
+  const visited=Array.from({length:rows},()=>Array(cols).fill(false));
+  const queue=[{r:player.r,c:player.c}];
+  // Also add box positions and target positions to reachable area
+  boxes.forEach(b=>queue.push({r:b.r,c:b.c}));
+  targets.forEach(t=>queue.push({r:t.r,c:t.c}));
+  queue.forEach(p=>{if(p.r>=0&&p.r<rows&&p.c>=0&&p.c<cols)visited[p.r][p.c]=true});
+  // Simple BFS from player
+  const q2=[player];
+  visited[player.r][player.c]=true;
+  while(q2.length){
+    const cur=q2.shift();
+    for(const[dr,dc]of[[-1,0],[1,0],[0,-1],[0,1]]){
+      const nr=cur.r+dr,nc=cur.c+dc;
+      if(nr>=0&&nr<rows&&nc>=0&&nc<cols&&!visited[nr][nc]&&grid[nr][nc]!==WALL){
+        visited[nr][nc]=true;
+        // Skip if box is there (but it's reachable)
+        if(!boxes.some(b=>b.r===nr&&b.c===nc))q2.push({r:nr,c:nc});
+      }
+    }
+  }
+  for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
+    if(grid[r][c]===FLOOR&&!visited[r][c])grid[r][c]=WALL;
+  }
+}
+
+/* ========== GAME LOGIC ========== */
+function isWall(r,c){return r<0||r>=rows||c<0||c>=cols||grid[r][c]===WALL}
+function boxAt(r,c){return boxes.findIndex(b=>b.r===r&&b.c===c)}
+function isTarget(r,c){return targets.some(t=>t.r===r&&t.c===c)}
+function isComplete(){return targets.every(t=>boxes.some(b=>b.r===t.r&&b.c===t.c))}
+
+function tryMove(dr,dc){
+  playerDir={dr,dc};
+  const nr=player.r+dr,nc=player.c+dc;
+  if(isWall(nr,nc))return;
+  const bi=boxAt(nr,nc);
+  if(bi>=0){
+    const br=nr+dr,bc=nc+dc;
+    if(isWall(br,bc)||boxAt(br,bc)>=0)return;
+    // Save state for undo
+    history.push({pr:player.r,pc:player.c,bi,br:boxes[bi].r,bc:boxes[bi].c,moves});
+    boxes[bi].r=br;boxes[bi].c=bc;
+    player.r=nr;player.c=nc;moves++;
+  } else {
+    history.push({pr:player.r,pc:player.c,bi:-1,br:0,bc:0,moves});
+    player.r=nr;player.c=nc;moves++;
+  }
+  updateUI();
+  if(isComplete())winLevel();
+}
+
+function undoMove(){
+  if(!history.length)return;
+  const h=history.pop();
+  player.r=h.pr;player.c=h.pc;
+  if(h.bi>=0){boxes[h.bi].r=h.br;boxes[h.bi].c=h.bc}
+  moves=h.moves;
+  updateUI();
+}
+
+function resetLevel(){startLevel(currentLevel)}
+function nextLevel(){if(currentLevel<LEVELS.length-1)startLevel(currentLevel+1);else showLevelSelect()}
+
+function winLevel(){
+  completed[currentLevel]=true;
+  if(!bestScores[currentLevel]||moves<bestScores[currentLevel])bestScores[currentLevel]=moves;
+  localStorage.setItem('sokoban_done',JSON.stringify(completed));
+  localStorage.setItem('sokoban_best',JSON.stringify(bestScores));
+  document.getElementById('winMoves').textContent=moves;
+  setTimeout(()=>document.getElementById('winOverlay').classList.remove('hidden'),300);
+  spawnParticles();
+}
+function hideWin(){document.getElementById('winOverlay').classList.add('hidden')}
+
+/* ========== START LEVEL ========== */
+function startLevel(idx){
+  currentLevel=idx;
+  parseLevel(idx);
+  moves=0;history=[];playerDir={dr:0,dc:1};particles=[];
+  hideWin();
+  showGame();
+  resizeCanvas();
+  updateUI();
+  render();
+}
+
+function updateUI(){
+  document.getElementById('lvlNum').textContent=currentLevel+1;
+  document.getElementById('moveNum').textContent=moves;
+  document.getElementById('bestNum').textContent=bestScores[currentLevel]||'-';
+}
+
+/* ========== CANVAS / RENDERING ========== */
+function resizeCanvas(){
+  canvas=document.getElementById('gameCanvas');
+  ctx=canvas.getContext('2d');
+  const wrap=canvas.parentElement;
+  const maxW=wrap.clientWidth-20;
+  const maxH=wrap.clientHeight-20;
+  cellSize=Math.min(Math.floor(maxW/cols),Math.floor(maxH/rows),64);
+  cellSize=Math.max(cellSize,20);
+  const dpr=window.devicePixelRatio||1;
+  canvas.width=cols*cellSize*dpr;
+  canvas.height=rows*cellSize*dpr;
+  canvas.style.width=cols*cellSize+'px';
+  canvas.style.height=rows*cellSize+'px';
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  offsetX=0;offsetY=0;
+  render();
+}
+
+function render(){
+  if(!ctx)return;
+  animFrame++;
+  const cs=cellSize;
+  ctx.clearRect(0,0,cols*cs,rows*cs);
+
+  // Draw floor
+  for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
+    if(grid[r][c]===WALL)continue;
+    const x=c*cs,y=r*cs;
+    ctx.fillStyle='#1e1a16';
+    ctx.fillRect(x,y,cs,cs);
+    ctx.strokeStyle='#2a2520';
+    ctx.lineWidth=.5;
+    ctx.strokeRect(x+.5,y+.5,cs-1,cs-1);
+  }
+
+  // Draw targets (pulsing)
+  const pulse=.5+.3*Math.sin(animFrame*.06);
+  targets.forEach(t=>{
+    if(boxes.some(b=>b.r===t.r&&b.c===t.c))return;
+    const x=t.c*cs+cs/2,y=t.r*cs+cs/2;
+    const sz=cs*.3;
+    ctx.save();
+    ctx.globalAlpha=pulse;
+    ctx.fillStyle='#e85d04';
+    ctx.beginPath();
+    ctx.moveTo(x,y-sz);ctx.lineTo(x+sz,y);ctx.lineTo(x,y+sz);ctx.lineTo(x-sz,y);
+    ctx.closePath();ctx.fill();
+    // Glow
+    ctx.globalAlpha=pulse*.3;
+    ctx.shadowColor='#e85d04';ctx.shadowBlur=cs*.4;
+    ctx.fill();
+    ctx.restore();
+  });
+
+  // Draw walls with 3D effect
+  for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
+    if(grid[r][c]!==WALL)continue;
+    const x=c*cs,y=r*cs;
+    // Check if adjacent to floor (visible wall)
+    const adjFloor=[[-1,0],[1,0],[0,-1],[0,1]].some(([dr,dc])=>{
+      const nr=r+dr,nc=c+dc;
+      return nr>=0&&nr<rows&&nc>=0&&nc<cols&&grid[nr][nc]!==WALL;
+    });
+    if(!adjFloor)continue; // Skip internal walls
+    // Wall face
+    ctx.fillStyle='#3a3228';
+    ctx.fillRect(x,y,cs,cs);
+    // Top highlight
+    ctx.fillStyle='#5c4f43';
+    ctx.fillRect(x,y,cs,cs*.2);
+    // Left highlight
+    ctx.fillStyle='#4a3f35';
+    ctx.fillRect(x,y,cs*.15,cs);
+    // Bottom shadow
+    ctx.fillStyle='#2a2018';
+    ctx.fillRect(x,y+cs*.85,cs,cs*.15);
+    // Right shadow
+    ctx.fillStyle='#2a2018';
+    ctx.fillRect(x+cs*.85,y,cs*.15,cs);
+    // Subtle border
+    ctx.strokeStyle='#221c14';
+    ctx.lineWidth=1;
+    ctx.strokeRect(x+.5,y+.5,cs-1,cs-1);
+  }
+
+  // Draw boxes
+  boxes.forEach(b=>{
+    const x=b.c*cs,y=b.r*cs;
+    const onTarget=isTarget(b.r,b.c);
+    const pad=cs*.1;
+    // Shadow
+    ctx.fillStyle='rgba(0,0,0,.35)';
+    roundRect(ctx,x+pad+3,y+pad+3,cs-pad*2,cs-pad*2,cs*.12);
+    ctx.fill();
+    // Box body
+    ctx.fillStyle=onTarget?'#2d9a5e':'#c4922a';
+    roundRect(ctx,x+pad,y+pad,cs-pad*2,cs-pad*2,cs*.12);
+    ctx.fill();
+    // Top highlight
+    ctx.fillStyle=onTarget?'#40c77b':'#dbb04a';
+    roundRect(ctx,x+pad,y+pad,cs-pad*2,(cs-pad*2)*.35,cs*.12);
+    ctx.fill();
+    // Cross lines
+    ctx.strokeStyle=onTarget?'rgba(255,255,255,.2)':'rgba(0,0,0,.2)';
+    ctx.lineWidth=Math.max(1,cs*.04);
+    ctx.beginPath();
+    ctx.moveTo(x+pad+cs*.1,y+pad+cs*.1);ctx.lineTo(x+cs-pad-cs*.1,y+cs-pad-cs*.1);
+    ctx.moveTo(x+cs-pad-cs*.1,y+pad+cs*.1);ctx.lineTo(x+pad+cs*.1,y+cs-pad-cs*.1);
+    ctx.stroke();
+    // Border
+    ctx.strokeStyle=onTarget?'#1e7a48':'#8b6914';
+    ctx.lineWidth=Math.max(1,cs*.03);
+    roundRect(ctx,x+pad,y+pad,cs-pad*2,cs-pad*2,cs*.12);
+    ctx.stroke();
+    // Checkmark for box on target
+    if(onTarget){
+      ctx.strokeStyle='rgba(255,255,255,.7)';
+      ctx.lineWidth=Math.max(2,cs*.06);
+      ctx.lineCap='round';ctx.lineJoin='round';
+      ctx.beginPath();
+      ctx.moveTo(x+cs*.3,y+cs*.52);
+      ctx.lineTo(x+cs*.44,y+cs*.66);
+      ctx.lineTo(x+cs*.7,y+cs*.36);
+      ctx.stroke();
+    }
+  });
+
+  // Draw player
+  const px=player.c*cs+cs/2,py=player.r*cs+cs/2;
+  const pr=cs*.36;
+  // Shadow
+  ctx.fillStyle='rgba(0,0,0,.3)';
+  ctx.beginPath();ctx.ellipse(px+2,py+3,pr,pr*.85,0,0,Math.PI*2);ctx.fill();
+  // Body
+  const grad=ctx.createRadialGradient(px-pr*.3,py-pr*.3,0,px,py,pr);
+  grad.addColorStop(0,'#f48c06');grad.addColorStop(1,'#c65d07');
+  ctx.fillStyle=grad;
+  ctx.beginPath();ctx.arc(px,py,pr,0,Math.PI*2);ctx.fill();
+  // Border
+  ctx.strokeStyle='#9a3f05';ctx.lineWidth=Math.max(1,cs*.03);
+  ctx.beginPath();ctx.arc(px,py,pr,0,Math.PI*2);ctx.stroke();
+  // Eyes
+  const eyeOff=pr*.3;
+  const eyeR=pr*.18;
+  const pupilR=pr*.1;
+  const edx=playerDir.dc*eyeR*.4,edy=playerDir.dr*eyeR*.4;
+  // Left eye
+  ctx.fillStyle='#fff';
+  ctx.beginPath();ctx.arc(px-eyeOff,py-pr*.1,eyeR,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#1a1a1a';
+  ctx.beginPath();ctx.arc(px-eyeOff+edx,py-pr*.1+edy,pupilR,0,Math.PI*2);ctx.fill();
+  // Right eye
+  ctx.fillStyle='#fff';
+  ctx.beginPath();ctx.arc(px+eyeOff,py-pr*.1,eyeR,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#1a1a1a';
+  ctx.beginPath();ctx.arc(px+eyeOff+edx,py-pr*.1+edy,pupilR,0,Math.PI*2);ctx.fill();
+
+  // Draw particles
+  renderParticles();
+
+  requestAnimationFrame(render);
+}
+
+function roundRect(ctx,x,y,w,h,r){
+  r=Math.min(r,w/2,h/2);
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);
+  ctx.closePath();
+}
+
+/* ========== PARTICLES ========== */
+function spawnParticles(){
+  const cs=cellSize;
+  for(let i=0;i<40;i++){
+    particles.push({
+      x:player.c*cs+cs/2,y:player.r*cs+cs/2,
+      vx:(Math.random()-.5)*6,vy:(Math.random()-.5)*6-2,
+      life:1,decay:.01+Math.random()*.02,
+      size:2+Math.random()*4,
+      color:['#f48c06','#e85d04','#fbbf24','#40c77b','#fff'][Math.floor(Math.random()*5)]
+    });
+  }
+}
+function renderParticles(){
+  for(let i=particles.length-1;i>=0;i--){
+    const p=particles[i];
+    p.x+=p.vx;p.y+=p.vy;p.vy+=.1;p.life-=p.decay;
+    if(p.life<=0){particles.splice(i,1);continue}
+    ctx.globalAlpha=p.life;
+    ctx.fillStyle=p.color;
+    ctx.beginPath();ctx.arc(p.x,p.y,p.size*p.life,0,Math.PI*2);ctx.fill();
+  }
+  ctx.globalAlpha=1;
+}
+
+/* ========== INPUT ========== */
+document.addEventListener('keydown',e=>{
+  if(document.getElementById('gameScreen').classList.contains('hidden'))return;
+  if(document.getElementById('winOverlay').classList.contains('hidden')===false){
+    if(e.key==='Enter'||e.key===' ')nextLevel();
+    return;
+  }
+  switch(e.key){
+    case'ArrowUp':case'w':case'W':e.preventDefault();tryMove(-1,0);break;
+    case'ArrowDown':case's':case'S':e.preventDefault();tryMove(1,0);break;
+    case'ArrowLeft':case'a':case'A':e.preventDefault();tryMove(0,-1);break;
+    case'ArrowRight':case'd':case'D':e.preventDefault();tryMove(0,1);break;
+    case'z':case'Z':undoMove();break;
+    case'r':case'R':resetLevel();break;
+    case'Escape':showLevelSelect();break;
+  }
+});
+
+function handleDpad(dc,dr,e){
+  e.preventDefault();
+  tryMove(dr,dc);
+}
+
+// Swipe detection
+let touchStart=null;
+document.addEventListener('touchstart',e=>{
+  if(document.getElementById('gameScreen').classList.contains('hidden'))return;
+  touchStart={x:e.touches[0].clientX,y:e.touches[0].clientY};
+},{passive:true});
+document.addEventListener('touchend',e=>{
+  if(!touchStart)return;
+  const dx=e.changedTouches[0].clientX-touchStart.x;
+  const dy=e.changedTouches[0].clientY-touchStart.y;
+  touchStart=null;
+  if(Math.abs(dx)<20&&Math.abs(dy)<20)return;
+  if(Math.abs(dx)>Math.abs(dy)){tryMove(0,dx>0?1:-1)}
+  else{tryMove(dy>0?1:-1,0)}
+},{passive:true});
+
+/* ========== RESIZE ========== */
+window.addEventListener('resize',()=>{
+  if(!document.getElementById('gameScreen').classList.contains('hidden'))resizeCanvas();
+});
+
+/* ========== INIT ========== */
+showTitle();
+</script>
+</body>
+</html>
